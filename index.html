@@ -639,21 +639,42 @@
             const storyForm = document.querySelector('.story-form');
             const myStoriesBtn = document.getElementById('myStoriesBtn');
             const likedStoriesBtn = document.getElementById('likedStoriesBtn');
+            const newStoryForm = document.getElementById('newStoryForm');
             
             if (currentUser) {
+                // Пользователь авторизован
                 authButtons.style.display = 'none';
                 authInfo.classList.add('active');
                 userName.textContent = currentUser.username;
-                storyForm.style.display = 'block';
-                myStoriesBtn.style.display = 'block';
-                likedStoriesBtn.style.display = 'block';
+                
+                // Показываем форму добавления истории
+                if (storyForm) {
+                    storyForm.style.display = 'block';
+                }
+                if (newStoryForm) {
+                    newStoryForm.style.display = 'block';
+                }
+                
+                // Показываем кнопки навигации
+                if (myStoriesBtn) myStoriesBtn.style.display = 'block';
+                if (likedStoriesBtn) likedStoriesBtn.style.display = 'block';
             } else {
+                // Пользователь не авторизован
                 authButtons.style.display = 'flex';
                 authInfo.classList.remove('active');
                 userName.textContent = '';
-                storyForm.style.display = 'none';
-                myStoriesBtn.style.display = 'none';
-                likedStoriesBtn.style.display = 'none';
+                
+                // Скрываем форму добавления истории
+                if (storyForm) {
+                    storyForm.style.display = 'none';
+                }
+                if (newStoryForm) {
+                    newStoryForm.style.display = 'none';
+                }
+                
+                // Скрываем кнопки навигации
+                if (myStoriesBtn) myStoriesBtn.style.display = 'none';
+                if (likedStoriesBtn) likedStoriesBtn.style.display = 'none';
             }
         }
 
@@ -899,34 +920,7 @@
                 showMessage('success', 'Вход выполнен успешно!');
                 document.getElementById('authContainer').classList.remove('active');
                 document.getElementById('authForm').reset();
-                updateAuthUI();
-            }
-        }
-
-        // Обновляем функцию обновления UI
-        function updateAuthUI() {
-            const currentUser = getCurrentUser();
-            const authButtons = document.getElementById('authButtons');
-            const authInfo = document.getElementById('authInfo');
-            const userName = document.getElementById('userName');
-            const storyForm = document.querySelector('.story-form');
-            const myStoriesBtn = document.getElementById('myStoriesBtn');
-            const likedStoriesBtn = document.getElementById('likedStoriesBtn');
-            
-            if (currentUser) {
-                authButtons.style.display = 'none';
-                authInfo.classList.add('active');
-                userName.textContent = currentUser.username;
-                storyForm.style.display = 'block';
-                myStoriesBtn.style.display = 'block';
-                likedStoriesBtn.style.display = 'block';
-            } else {
-                authButtons.style.display = 'flex';
-                authInfo.classList.remove('active');
-                userName.textContent = '';
-                storyForm.style.display = 'none';
-                myStoriesBtn.style.display = 'none';
-                likedStoriesBtn.style.display = 'none';
+                updateAuthUI(); // Обновляем UI после успешного входа
             }
         }
 
@@ -940,134 +934,6 @@
             } catch (error) {
                 console.error('Ошибка при выходе:', error);
                 showMessage('error', 'Произошла ошибка при выходе из системы');
-            }
-        }
-
-        // Обновляем функцию обновления UI
-        function updateAuthUI() {
-            const currentUser = getCurrentUser();
-            const authButtons = document.getElementById('authButtons');
-            const authInfo = document.getElementById('authInfo');
-            const userName = document.getElementById('userName');
-            const storyForm = document.querySelector('.story-form');
-            const myStoriesBtn = document.getElementById('myStoriesBtn');
-            const likedStoriesBtn = document.getElementById('likedStoriesBtn');
-            
-            if (currentUser) {
-                authButtons.style.display = 'none';
-                authInfo.classList.add('active');
-                userName.textContent = currentUser.username;
-                storyForm.style.display = 'block';
-                myStoriesBtn.style.display = 'block';
-                likedStoriesBtn.style.display = 'block';
-            } else {
-                authButtons.style.display = 'flex';
-                authInfo.classList.remove('active');
-                userName.textContent = '';
-                storyForm.style.display = 'none';
-                myStoriesBtn.style.display = 'none';
-                likedStoriesBtn.style.display = 'none';
-            }
-        }
-
-        // Обновляем функцию инициализации
-        document.addEventListener('DOMContentLoaded', () => {
-            try {
-                // Проверяем доступность localStorage
-                if (!isStorageAvailable()) {
-                    console.warn('localStorage недоступен');
-                    return;
-                }
-                
-                // Инициализация хранилища
-                if (!localStorage.getItem('stories')) {
-                    localStorage.setItem('stories', JSON.stringify([]));
-                }
-                if (!localStorage.getItem('users')) {
-                    localStorage.setItem('users', JSON.stringify([]));
-                }
-                
-                // Обновляем UI и отображаем истории
-                updateAuthUI();
-                displayStories();
-                
-                // Добавляем обработчики событий для форм
-                initializeEventListeners();
-                
-            } catch (error) {
-                console.error('Ошибка при инициализации:', error);
-                showMessage('error', 'Произошла ошибка при инициализации приложения');
-            }
-        });
-
-        function initializeEventListeners() {
-            // Обработчик формы авторизации
-            const authForm = document.getElementById('authForm');
-            if (authForm) {
-                authForm.addEventListener('submit', handleAuthSubmit);
-            }
-            
-            // Обработчик формы добавления истории
-            const storyForm = document.getElementById('newStoryForm');
-            if (storyForm) {
-                storyForm.addEventListener('submit', handleStorySubmit);
-            }
-            
-            // Обработчик поиска
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', debounce((e) => {
-                    searchStories(e.target.value);
-                }, 300));
-                
-                searchInput.addEventListener('keyup', (e) => {
-                    if (e.key === 'Escape') {
-                        searchInput.value = '';
-                        searchStories('');
-                    }
-                });
-            }
-        }
-
-        function handleStorySubmit(e) {
-            e.preventDefault();
-            clearErrors();
-            
-            const currentUser = getCurrentUser();
-            if (!currentUser) {
-                showMessage('error', 'Необходимо войти в систему');
-                return;
-            }
-            
-            const formData = new FormData(e.target);
-            const storyData = Object.fromEntries(formData);
-            
-            const { isValid, errors } = validateStory(storyData);
-            if (!isValid) {
-                Object.keys(errors).forEach(key => showError(key, errors[key]));
-                return;
-            }
-            
-            try {
-                const newStory = {
-                    ...storyData,
-                    id: Date.now().toString(),
-                    authorName: currentUser.username,
-                    date: new Date().toISOString(),
-                    likes: 0,
-                    likedBy: []
-                };
-                
-                const stories = getStoriesFromLocalStorage();
-                stories.unshift(newStory);
-                saveStoriesToLocalStorage(stories);
-                
-                displayStories();
-                e.target.reset();
-                showMessage('success', 'История успешно добавлена!');
-            } catch (error) {
-                console.error('Ошибка при добавлении истории:', error);
-                showMessage('error', 'Произошла ошибка при добавлении истории');
             }
         }
     </script>
