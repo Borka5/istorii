@@ -632,49 +632,65 @@
 
         // Обновляем функцию обновления UI
         function updateAuthUI() {
-            const currentUser = getCurrentUser();
-            const authButtons = document.getElementById('authButtons');
-            const authInfo = document.getElementById('authInfo');
-            const userName = document.getElementById('userName');
-            const storyForm = document.querySelector('.story-form');
-            const myStoriesBtn = document.getElementById('myStoriesBtn');
-            const likedStoriesBtn = document.getElementById('likedStoriesBtn');
-            const newStoryForm = document.getElementById('newStoryForm');
-            
-            if (currentUser) {
-                // Пользователь авторизован
-                authButtons.style.display = 'none';
-                authInfo.classList.add('active');
-                userName.textContent = currentUser.username;
+            try {
+                const currentUser = getCurrentUser();
+                const authButtons = document.querySelector('.auth-buttons');
+                const authInfo = document.querySelector('.auth-info');
+                const userName = document.getElementById('userName');
+                const storyForm = document.querySelector('.story-form');
+                const myStoriesBtn = document.getElementById('myStoriesBtn');
+                const likedStoriesBtn = document.getElementById('likedStoriesBtn');
+                const newStoryForm = document.getElementById('newStoryForm');
                 
-                // Показываем форму добавления истории
-                if (storyForm) {
-                    storyForm.style.display = 'block';
-                }
-                if (newStoryForm) {
-                    newStoryForm.style.display = 'block';
+                if (!authButtons || !authInfo) {
+                    console.error('Не найдены элементы авторизации');
+                    return;
                 }
                 
-                // Показываем кнопки навигации
-                if (myStoriesBtn) myStoriesBtn.style.display = 'block';
-                if (likedStoriesBtn) likedStoriesBtn.style.display = 'block';
-            } else {
-                // Пользователь не авторизован
-                authButtons.style.display = 'flex';
-                authInfo.classList.remove('active');
-                userName.textContent = '';
-                
-                // Скрываем форму добавления истории
-                if (storyForm) {
-                    storyForm.style.display = 'none';
+                if (currentUser) {
+                    // Пользователь авторизован
+                    authButtons.style.display = 'none'; // Скрываем кнопки входа/регистрации
+                    authInfo.style.display = 'flex'; // Показываем информацию о пользователе
+                    
+                    if (userName) {
+                        userName.textContent = currentUser.username;
+                    }
+                    
+                    // Показываем форму добавления истории
+                    if (storyForm) {
+                        storyForm.style.display = 'block';
+                    }
+                    if (newStoryForm) {
+                        newStoryForm.style.display = 'block';
+                    }
+                    
+                    // Показываем кнопки навигации
+                    if (myStoriesBtn) myStoriesBtn.style.display = 'block';
+                    if (likedStoriesBtn) likedStoriesBtn.style.display = 'block';
+                    
+                } else {
+                    // Пользователь не авторизован
+                    authButtons.style.display = 'flex'; // Показываем кнопки входа/регистрации
+                    authInfo.style.display = 'none'; // Скрываем информацию о пользователе
+                    
+                    if (userName) {
+                        userName.textContent = '';
+                    }
+                    
+                    // Скрываем форму добавления истории
+                    if (storyForm) {
+                        storyForm.style.display = 'none';
+                    }
+                    if (newStoryForm) {
+                        newStoryForm.style.display = 'none';
+                    }
+                    
+                    // Скрываем кнопки навигации
+                    if (myStoriesBtn) myStoriesBtn.style.display = 'none';
+                    if (likedStoriesBtn) likedStoriesBtn.style.display = 'none';
                 }
-                if (newStoryForm) {
-                    newStoryForm.style.display = 'none';
-                }
-                
-                // Скрываем кнопки навигации
-                if (myStoriesBtn) myStoriesBtn.style.display = 'none';
-                if (likedStoriesBtn) likedStoriesBtn.style.display = 'none';
+            } catch (error) {
+                console.error('Ошибка при обновлении UI:', error);
             }
         }
 
@@ -873,13 +889,11 @@
         function handleRegistration(username, password) {
             const users = getUsers();
             
-            // Проверка существующего пользователя
             if (users.some(u => u.username === username)) {
                 showError('username', 'Пользователь с таким именем уже существует');
                 return;
             }
             
-            // Валидация пароля
             if (password.length < 6) {
                 showError('password', 'Пароль должен содержать минимум 6 символов');
                 return;
@@ -896,9 +910,15 @@
             if (saveUsers(users)) {
                 setCurrentUser(newUser);
                 showMessage('success', 'Регистрация успешна!');
-                document.getElementById('authContainer').classList.remove('active');
-                document.getElementById('authForm').reset();
-                updateAuthUI();
+                const authContainer = document.getElementById('authContainer');
+                if (authContainer) {
+                    authContainer.classList.remove('active');
+                }
+                const authForm = document.getElementById('authForm');
+                if (authForm) {
+                    authForm.reset();
+                }
+                updateAuthUI(); // Обновляем UI после успешной регистрации
             }
         }
 
@@ -918,8 +938,14 @@
             
             if (setCurrentUser(user)) {
                 showMessage('success', 'Вход выполнен успешно!');
-                document.getElementById('authContainer').classList.remove('active');
-                document.getElementById('authForm').reset();
+                const authContainer = document.getElementById('authContainer');
+                if (authContainer) {
+                    authContainer.classList.remove('active');
+                }
+                const authForm = document.getElementById('authForm');
+                if (authForm) {
+                    authForm.reset();
+                }
                 updateAuthUI(); // Обновляем UI после успешного входа
             }
         }
