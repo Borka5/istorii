@@ -112,16 +112,6 @@
             transition: background-color 0.3s;
         }
         
-        .like-button {
-            background-color: #ff4d4d;
-            color: white;
-            padding: 5px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        
         .like-button.liked {
             background-color: #ff3333;
             opacity: 0.8;
@@ -485,26 +475,28 @@
         }
 
         function showMessage(type, message) {
-            const successMsg = document.getElementById('successMessage');
-            const errorMsg = document.getElementById('errorMessage');
-            
-            // Сначала скрываем все сообщения
-            successMsg.style.display = 'none';
-            errorMsg.style.display = 'none';
-            
-            if (type === 'success') {
-                successMsg.textContent = message || 'Операция выполнена успешно!';
-                successMsg.style.display = 'block';
-            } else {
-                errorMsg.textContent = message || 'Произошла ошибка';
-                errorMsg.style.display = 'block';
-            }
-            
-            // Автоматически скрываем сообщение через 3 секунды
-            setTimeout(() => {
+            try {
+                const successMsg = document.getElementById('successMessage');
+                const errorMsg = document.getElementById('errorMessage');
+                
+                if (!successMsg || !errorMsg) return;
+                
+                // Скрываем все сообщения
                 successMsg.style.display = 'none';
                 errorMsg.style.display = 'none';
-            }, 3000);
+                
+                const messageElement = type === 'success' ? successMsg : errorMsg;
+                messageElement.textContent = message || (type === 'success' ? 'Операция выполнена успешно!' : 'Произошла ошибка');
+                messageElement.style.display = 'block';
+                
+                // Автоматически скрываем сообщение
+                setTimeout(() => {
+                    messageElement.style.display = 'none';
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Ошибка при отображении сообщения:', error);
+            }
         }
 
         // Функция для сохранения историй в localStorage
@@ -530,88 +522,106 @@
 
         // Обновляем функцию отображения историй
         function displayStories(storiesFilter = null) {
-            const storiesContainer = document.querySelector('.stories-container');
-            const stories = getStoriesFromLocalStorage();
-            const currentUser = getCurrentUser();
-            
-            // Фильтруем истории, если указан фильтр
-            const filteredStories = storiesFilter ? 
-                stories.filter(storiesFilter) : 
-                stories;
-            
-            storiesContainer.innerHTML = ''; // Очищаем контейнер
-            
-            if (filteredStories.length === 0) {
-                storiesContainer.innerHTML = `
-                    <div class="no-stories-message">
-                        ${storiesFilter ? 'У вас пока нет историй' : 'Историй пока нет'}
-                    </div>
-                `;
-                return;
-            }
-            
-            filteredStories.forEach(story => {
-                const hasLiked = currentUser && story.likedBy && story.likedBy.includes(currentUser.username);
-                const likeButtonClass = hasLiked ? 'like-button liked' : 'like-button';
-                const likeButtonDisabled = !currentUser ? 'disabled' : '';
-                const likeTitle = !currentUser ? 'Войдите, чтобы поставить лайк' : 
-                                hasLiked ? 'Нажмите, чтобы убрать лайк' : 'Нажмите, чтобы поставить лайк';
+            try {
+                const storiesContainer = document.querySelector('.stories-container');
+                if (!storiesContainer) return;
                 
-                const storyHTML = `
-                    <div class="story-container" data-id="${story.id}">
-                        <h2 class="story-title">${story.storyTitle}</h2>
-                        <p class="story-author">Автор: ${story.authorName}</p>
-                        <div class="story-text">${story.storyText}</div>
-                        <div class="story-actions">
-                            <button class="${likeButtonClass}" ${likeButtonDisabled} 
-                                onclick="handleLike(this, '${story.id}')"
-                                title="${likeTitle}"
-                            >❤ ${story.likes || 0}</button>
-                            <button class="share-button">Поделиться</button>
+                const stories = getStoriesFromLocalStorage();
+                const currentUser = getCurrentUser();
+                
+                // Фильтруем истории
+                const filteredStories = storiesFilter ? 
+                    stories.filter(storiesFilter) : 
+                    stories;
+                
+                storiesContainer.innerHTML = '';
+                
+                if (filteredStories.length === 0) {
+                    storiesContainer.innerHTML = `
+                        <div class="no-stories-message">
+                            ${storiesFilter ? 'У вас пока нет историй' : 'Историй пока нет'}
                         </div>
-                    </div>
-                `;
-                storiesContainer.insertAdjacentHTML('afterbegin', storyHTML);
-            });
+                    `;
+                    return;
+                }
+                
+                filteredStories.forEach(story => {
+                    if (!story || !story.id) return; // Пропускаем некорректные истории
+                    
+                    const hasLiked = currentUser && story.likedBy && story.likedBy.includes(currentUser.username);
+                    const likeButtonClass = hasLiked ? 'like-button liked' : 'like-button';
+                    const likeButtonDisabled = !currentUser ? 'disabled' : '';
+                    const likeTitle = !currentUser ? 'Войдите, чтобы поставить лайк' : 
+                                    hasLiked ? 'Нажмите, чтобы убрать лайк' : 'Нажмите, чтобы поставить лайк';
+                    
+                    const storyHTML = `
+                        <div class="story-container" data-id="${story.id}">
+                            <h2 class="story-title">${story.storyTitle || 'Без названия'}</h2>
+                            <p class="story-author">Автор: ${story.authorName || 'Аноним'}</p>
+                            <div class="story-text">${story.storyText || ''}</div>
+                            <div class="story-actions">
+                                <button class="${likeButtonClass}" ${likeButtonDisabled} 
+                                    onclick="handleLike(this, '${story.id}')"
+                                    title="${likeTitle}"
+                                >❤ ${story.likes || 0}</button>
+                                <button class="share-button">Поделиться</button>
+                            </div>
+                        </div>
+                    `;
+                    storiesContainer.insertAdjacentHTML('afterbegin', storyHTML);
+                });
+            } catch (error) {
+                console.error('Ошибка при отображении историй:', error);
+                showMessage('error', 'Произошла ошибка при загрузке историй');
+            }
         }
 
         // Добавляем функцию обработки лайков
         function handleLike(button, storyId) {
-            const currentUser = getCurrentUser();
-            if (!currentUser) {
-                showMessage('error', 'Необходимо войти в систему');
-                return;
+            try {
+                const currentUser = getCurrentUser();
+                if (!currentUser) {
+                    showMessage('error', 'Необходимо войти в систему');
+                    return;
+                }
+                
+                if (!isStorageAvailable()) {
+                    showMessage('error', 'Локальное хранилище недоступно');
+                    return;
+                }
+                
+                const stories = getStoriesFromLocalStorage();
+                const story = stories.find(s => s.id && s.id.toString() === storyId.toString());
+                
+                if (!story) {
+                    console.error('История не найдена');
+                    return;
+                }
+                
+                // Инициализируем массив лайков, если его нет
+                if (!Array.isArray(story.likedBy)) {
+                    story.likedBy = [];
+                }
+                
+                const hasLiked = story.likedBy.includes(currentUser.username);
+                
+                if (hasLiked) {
+                    // Убираем лайк
+                    story.likedBy = story.likedBy.filter(username => username !== currentUser.username);
+                    story.likes = Math.max(0, (story.likes || 1) - 1);
+                } else {
+                    // Добавляем лайк
+                    story.likedBy.push(currentUser.username);
+                    story.likes = (story.likes || 0) + 1;
+                }
+                
+                saveStoriesToLocalStorage(stories);
+                displayStories(); // Обновляем отображение всех историй
+                
+            } catch (error) {
+                console.error('Ошибка при обработке лайка:', error);
+                showMessage('error', 'Произошла ошибка при обработке лайка');
             }
-            
-            const stories = getStoriesFromLocalStorage();
-            const story = stories.find(s => s.id.toString() === storyId.toString());
-            
-            if (!story) return;
-            
-            // Инициализируем массив лайков, если его нет
-            if (!story.likedBy) {
-                story.likedBy = [];
-            }
-            
-            const hasLiked = story.likedBy.includes(currentUser.username);
-            
-            if (hasLiked) {
-                // Убираем лайк
-                story.likedBy = story.likedBy.filter(username => username !== currentUser.username);
-                story.likes = Math.max(0, (story.likes || 1) - 1);
-                button.classList.remove('liked');
-            } else {
-                // Добавляем лайк
-                story.likedBy.push(currentUser.username);
-                story.likes = (story.likes || 0) + 1;
-                button.classList.add('liked');
-            }
-            
-            button.textContent = `❤ ${story.likes}`;
-            saveStoriesToLocalStorage(stories);
-            
-            // Обновляем отображение всех историй
-            displayStories();
         }
 
         // Обновляем функцию для отображения историй пользователя
@@ -633,16 +643,7 @@
             showMessage('success', 'Показаны ваши истории');
         }
 
-        // Добавляем обработчик для кнопки "Все истории"
-        document.querySelector('a[href="#stories"]').addEventListener('click', (e) => {
-            e.preventDefault();
-            const allButtons = document.querySelectorAll('.nav-menu button, .nav-menu a');
-            allButtons.forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-            displayStories();
-        });
-
-        // Обновляем обработчик отправки формы
+        // Добавляем обработчик отправки формы
         document.getElementById('newStoryForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             clearErrors();
@@ -687,18 +688,6 @@
                 showMessage('error', 'Произошла ошибка при добавлении истории');
             }
         });
-
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        }
 
         function searchStories(query) {
             const stories = document.querySelectorAll('.story-container');
@@ -783,7 +772,8 @@
 
         function getCurrentUser() {
             try {
-                return JSON.parse(localStorage.getItem('currentUser'));
+                const userJson = localStorage.getItem('currentUser');
+                return userJson ? JSON.parse(userJson) : null;
             } catch (error) {
                 console.error('Ошибка при получении текущего пользователя:', error);
                 return null;
@@ -793,80 +783,20 @@
         function setCurrentUser(user) {
             try {
                 if (!isStorageAvailable()) {
-                    showMessage('error', 'Локальное хранилище недоступно. Возможно, вы в приватном режиме.');
+                    showMessage('error', 'Локальное хранилище недоступно');
                     return false;
                 }
                 localStorage.setItem('currentUser', JSON.stringify(user));
-                updateAuthUI();
                 return true;
             } catch (error) {
-                console.error('Ошибка при установке текущего пользователя:', error);
+                console.error('Ошибка при установке пользователя:', error);
                 showMessage('error', 'Не удалось сохранить данные пользователя');
                 return false;
             }
         }
 
         // Обновляем обработчик формы авторизации
-        document.getElementById('authForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            clearErrors();
-            
-            if (!isStorageAvailable()) {
-                showMessage('error', 'Регистрация невозможна в приватном режиме браузера. Пожалуйста, используйте обычный режим.');
-                return;
-            }
-            
-            const type = e.target.dataset.type;
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value.trim();
-            
-            if (!username || !password) {
-                showMessage('error', 'Заполните все поля');
-                return;
-            }
-            
-            if (type === 'register') {
-                // Регистрация
-                const users = getUsers();
-                if (users.some(u => u.username === username)) {
-                    showError('username', 'Пользователь с таким именем уже существует');
-                    return;
-                }
-                
-                if (password.length < 6) {
-                    showError('password', 'Пароль должен содержать минимум 6 символов');
-                    return;
-                }
-                
-                const newUser = { username, password };
-                users.push(newUser);
-                if (saveUsers(users)) {
-                    setCurrentUser(newUser);
-                    showMessage('success', 'Регистрация успешна!');
-                    document.getElementById('authContainer').classList.remove('active');
-                    e.target.reset();
-                }
-            } else {
-                // Вход
-                const users = getUsers();
-                const user = users.find(u => u.username === username && u.password === password);
-                
-                if (!user) {
-                    if (!users.some(u => u.username === username)) {
-                        showError('username', 'Пользователь с таким именем не найден');
-                    } else {
-                        showError('password', 'Неверный пароль');
-                    }
-                    return;
-                }
-                
-                if (setCurrentUser(user)) {
-                    showMessage('success', 'Вход выполнен успешно!');
-                    document.getElementById('authContainer').classList.remove('active');
-                    e.target.reset();
-                }
-            }
-        });
+        document.getElementById('authForm').addEventListener('submit', handleAuthSubmit);
 
         // Обновляем функцию для отображения формы авторизации
         function showAuthForm(type) {
@@ -883,9 +813,15 @@
 
         // Обновляем функцию выхода
         function logout() {
-            localStorage.removeItem('currentUser');
-            updateAuthUI();
-            showMessage('success', 'Вы вышли из системы');
+            try {
+                localStorage.removeItem('currentUser');
+                updateAuthUI();
+                showMessage('success', 'Вы успешно вышли из системы');
+                displayStories(); // Обновляем отображение историй
+            } catch (error) {
+                console.error('Ошибка при выходе:', error);
+                showMessage('error', 'Произошла ошибка при выходе из системы');
+            }
         }
 
         // Обновляем функцию обновления UI
@@ -954,19 +890,189 @@
             }
         }
 
-        // Добавляем обработчик для инициализации при загрузке страницы
+        // Обновляем функцию инициализации
         document.addEventListener('DOMContentLoaded', () => {
-            // Инициализация хранилища, если оно пустое
-            if (!localStorage.getItem('stories')) {
-                localStorage.setItem('stories', JSON.stringify([]));
+            try {
+                // Проверяем доступность localStorage
+                if (!isStorageAvailable()) {
+                    console.warn('localStorage недоступен');
+                    return;
+                }
+                
+                // Инициализация хранилища
+                if (!localStorage.getItem('stories')) {
+                    localStorage.setItem('stories', JSON.stringify([]));
+                }
+                if (!localStorage.getItem('users')) {
+                    localStorage.setItem('users', JSON.stringify([]));
+                }
+                
+                // Обновляем UI и отображаем истории
+                updateAuthUI();
+                displayStories();
+                
+                // Добавляем обработчики событий для форм
+                initializeEventListeners();
+                
+            } catch (error) {
+                console.error('Ошибка при инициализации:', error);
+                showMessage('error', 'Произошла ошибка при инициализации приложения');
             }
-            if (!localStorage.getItem('users')) {
-                localStorage.setItem('users', JSON.stringify([]));
+        });
+
+        function initializeEventListeners() {
+            // Обработчик формы авторизации
+            const authForm = document.getElementById('authForm');
+            if (authForm) {
+                authForm.addEventListener('submit', handleAuthSubmit);
             }
             
-            updateAuthUI();
-            displayStories();
-        });
+            // Обработчик формы добавления истории
+            const storyForm = document.getElementById('newStoryForm');
+            if (storyForm) {
+                storyForm.addEventListener('submit', handleStorySubmit);
+            }
+            
+            // Обработчик поиска
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', debounce((e) => {
+                    searchStories(e.target.value);
+                }, 300));
+                
+                searchInput.addEventListener('keyup', (e) => {
+                    if (e.key === 'Escape') {
+                        searchInput.value = '';
+                        searchStories('');
+                    }
+                });
+            }
+        }
+
+        function handleAuthSubmit(e) {
+            e.preventDefault();
+            clearErrors();
+            
+            if (!isStorageAvailable()) {
+                showMessage('error', 'Локальное хранилище недоступно. Возможно, вы в приватном режиме браузера.');
+                return;
+            }
+            
+            const type = e.target.dataset.type;
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!username || !password) {
+                showMessage('error', 'Заполните все поля');
+                return;
+            }
+            
+            try {
+                if (type === 'register') {
+                    handleRegistration(username, password);
+                } else {
+                    handleLogin(username, password);
+                }
+            } catch (error) {
+                console.error('Ошибка авторизации:', error);
+                showMessage('error', 'Произошла ошибка при авторизации');
+            }
+        }
+
+        function handleRegistration(username, password) {
+            const users = getUsers();
+            
+            // Проверка существующего пользователя
+            if (users.some(u => u.username === username)) {
+                showError('username', 'Пользователь с таким именем уже существует');
+                return;
+            }
+            
+            // Валидация пароля
+            if (password.length < 6) {
+                showError('password', 'Пароль должен содержать минимум 6 символов');
+                return;
+            }
+            
+            const newUser = { 
+                username, 
+                password,
+                registrationDate: new Date().toISOString()
+            };
+            
+            users.push(newUser);
+            
+            if (saveUsers(users)) {
+                setCurrentUser(newUser);
+                showMessage('success', 'Регистрация успешна!');
+                document.getElementById('authContainer').classList.remove('active');
+                document.getElementById('authForm').reset();
+                updateAuthUI();
+            }
+        }
+
+        function handleLogin(username, password) {
+            const users = getUsers();
+            const user = users.find(u => u.username === username && u.password === password);
+            
+            if (!user) {
+                if (!users.some(u => u.username === username)) {
+                    showError('username', 'Пользователь с таким именем не найден');
+                } else {
+                    showError('password', 'Неверный пароль');
+                }
+                return;
+            }
+            
+            if (setCurrentUser(user)) {
+                showMessage('success', 'Вход выполнен успешно!');
+                document.getElementById('authContainer').classList.remove('active');
+                document.getElementById('authForm').reset();
+                updateAuthUI();
+            }
+        }
+
+        function handleStorySubmit(e) {
+            e.preventDefault();
+            clearErrors();
+            
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                showMessage('error', 'Необходимо войти в систему');
+                return;
+            }
+            
+            const formData = new FormData(e.target);
+            const storyData = Object.fromEntries(formData);
+            
+            const { isValid, errors } = validateStory(storyData);
+            if (!isValid) {
+                Object.keys(errors).forEach(key => showError(key, errors[key]));
+                return;
+            }
+            
+            try {
+                const newStory = {
+                    ...storyData,
+                    id: Date.now().toString(),
+                    authorName: currentUser.username,
+                    date: new Date().toISOString(),
+                    likes: 0,
+                    likedBy: []
+                };
+                
+                const stories = getStoriesFromLocalStorage();
+                stories.unshift(newStory);
+                saveStoriesToLocalStorage(stories);
+                
+                displayStories();
+                e.target.reset();
+                showMessage('success', 'История успешно добавлена!');
+            } catch (error) {
+                console.error('Ошибка при добавлении истории:', error);
+                showMessage('error', 'Произошла ошибка при добавлении истории');
+            }
+        }
     </script>
 </body>
 </html> 
