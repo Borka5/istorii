@@ -739,25 +739,156 @@
             }
         });
 
-        // Функции для работы с пользователями в localStorage
+        // Добавим функцию проверки доступности localStorage
+        function isStorageAvailable() {
+            try {
+                const test = '__storage_test__';
+                localStorage.setItem(test, test);
+                localStorage.removeItem(test);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Обновим функции работы с хранилищем
         function saveUsers(users) {
-            localStorage.setItem('users', JSON.stringify(users));
+            try {
+                if (!isStorageAvailable()) {
+                    showMessage('error', 'Локальное хранилище недоступно. Возможно, вы в приватном режиме.');
+                    return false;
+                }
+                localStorage.setItem('users', JSON.stringify(users));
+                return true;
+            } catch (error) {
+                console.error('Ошибка при сохранении пользователей:', error);
+                showMessage('error', 'Не удалось сохранить данные. Проверьте настройки браузера.');
+                return false;
+            }
         }
 
         function getUsers() {
-            return JSON.parse(localStorage.getItem('users') || '[]');
+            try {
+                if (!isStorageAvailable()) {
+                    showMessage('error', 'Локальное хранилище недоступно. Возможно, вы в приватном режиме.');
+                    return [];
+                }
+                const users = localStorage.getItem('users');
+                return users ? JSON.parse(users) : [];
+            } catch (error) {
+                console.error('Ошибка при получении пользователей:', error);
+                return [];
+            }
         }
 
         function getCurrentUser() {
-            return JSON.parse(localStorage.getItem('currentUser'));
+            try {
+                return JSON.parse(localStorage.getItem('currentUser'));
+            } catch (error) {
+                console.error('Ошибка при получении текущего пользователя:', error);
+                return null;
+            }
         }
 
         function setCurrentUser(user) {
-            localStorage.setItem('currentUser', JSON.stringify(user));
-            updateAuthUI();
+            try {
+                if (!isStorageAvailable()) {
+                    showMessage('error', 'Локальное хранилище недоступно. Возможно, вы в приватном режиме.');
+                    return false;
+                }
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                updateAuthUI();
+                return true;
+            } catch (error) {
+                console.error('Ошибка при установке текущего пользователя:', error);
+                showMessage('error', 'Не удалось сохранить данные пользователя');
+                return false;
+            }
         }
 
-        // Обновление UI в зависимости от состояния авторизации
+        // Обновляем обработчик формы авторизации
+        document.getElementById('authForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            clearErrors();
+            
+            if (!isStorageAvailable()) {
+                showMessage('error', 'Регистрация невозможна в приватном режиме браузера. Пожалуйста, используйте обычный режим.');
+                return;
+            }
+            
+            const type = e.target.dataset.type;
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!username || !password) {
+                showMessage('error', 'Заполните все поля');
+                return;
+            }
+            
+            if (type === 'register') {
+                // Регистрация
+                const users = getUsers();
+                if (users.some(u => u.username === username)) {
+                    showError('username', 'Пользователь с таким именем уже существует');
+                    return;
+                }
+                
+                if (password.length < 6) {
+                    showError('password', 'Пароль должен содержать минимум 6 символов');
+                    return;
+                }
+                
+                const newUser = { username, password };
+                users.push(newUser);
+                if (saveUsers(users)) {
+                    setCurrentUser(newUser);
+                    showMessage('success', 'Регистрация успешна!');
+                    document.getElementById('authContainer').classList.remove('active');
+                    e.target.reset();
+                }
+            } else {
+                // Вход
+                const users = getUsers();
+                const user = users.find(u => u.username === username && u.password === password);
+                
+                if (!user) {
+                    if (!users.some(u => u.username === username)) {
+                        showError('username', 'Пользователь с таким именем не найден');
+                    } else {
+                        showError('password', 'Неверный пароль');
+                    }
+                    return;
+                }
+                
+                if (setCurrentUser(user)) {
+                    showMessage('success', 'Вход выполнен успешно!');
+                    document.getElementById('authContainer').classList.remove('active');
+                    e.target.reset();
+                }
+            }
+        });
+
+        // Обновляем функцию для отображения формы авторизации
+        function showAuthForm(type) {
+            const authContainer = document.getElementById('authContainer');
+            const authTitle = document.getElementById('authTitle');
+            const authForm = document.getElementById('authForm');
+            
+            clearErrors();
+            authContainer.classList.add('active');
+            authTitle.textContent = type === 'login' ? 'Вход' : 'Регистрация';
+            authForm.dataset.type = type;
+            authForm.reset();
+        }
+
+        // Обновляем функцию выхода
+        function logout() {
+            localStorage.removeItem('currentUser');
+            updateAuthUI();
+            showMessage('success', 'Вы вышли из системы');
+        }
+
+        // Обновляем функцию обновления UI
         function updateAuthUI() {
             const currentUser = getCurrentUser();
             const authButtons = document.getElementById('authButtons');
@@ -781,106 +912,6 @@
                 storyForm.style.display = 'none';
                 myStoriesBtn.style.display = 'none';
                 likedStoriesBtn.style.display = 'none';
-                displayStories();
-            }
-        }
-
-        // Показать форму авторизации/регистрации
-        function showAuthForm(type) {
-            const authContainer = document.getElementById('authContainer');
-            const authTitle = document.getElementById('authTitle');
-            const authForm = document.getElementById('authForm');
-            
-            authContainer.classList.add('active');
-            authTitle.textContent = type === 'login' ? 'Вход' : 'Регистрация';
-            authForm.dataset.type = type;
-        }
-
-        // Обработка формы авторизации/регистрации
-        document.getElementById('authForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            clearErrors();
-            
-            const type = e.target.dataset.type;
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            if (type === 'register') {
-                // Регистрация
-                const users = getUsers();
-                if (users.some(u => u.username === username)) {
-                    showError('username', 'Пользователь с таким именем уже существует');
-                    document.getElementById('usernameError').style.display = 'block';
-                    return;
-                }
-                
-                if (password.length < 6) {
-                    showError('password', 'Пароль должен содержать минимум 6 символов');
-                    document.getElementById('passwordError').style.display = 'block';
-                    return;
-                }
-                
-                const newUser = { username, password };
-                users.push(newUser);
-                saveUsers(users);
-                setCurrentUser(newUser);
-                showMessage('success', 'Регистрация успешна!');
-                document.getElementById('authContainer').classList.remove('active');
-                e.target.reset();
-            } else {
-                // Вход
-                const users = getUsers();
-                const userExists = users.find(u => u.username === username);
-                
-                if (!userExists) {
-                    showError('username', 'Пользователь с таким именем не найден');
-                    return;
-                }
-                
-                const user = users.find(u => u.username === username && u.password === password);
-                if (!user) {
-                    showError('password', 'Неверный пароль');
-                    return;
-                }
-                
-                setCurrentUser(user);
-                showMessage('success', 'Вход выполнен успешно!');
-                document.getElementById('authContainer').classList.remove('active');
-                e.target.reset();
-            }
-        });
-
-        // Выход из системы
-        function logout() {
-            localStorage.removeItem('currentUser');
-            updateAuthUI();
-            showMessage('success', 'Вы вышли из системы');
-        }
-
-        // Добавим проверку инициализации при загрузке страницы
-        document.addEventListener('DOMContentLoaded', () => {
-            // Инициализация хранилища, если оно пустое
-            if (!localStorage.getItem('stories')) {
-                localStorage.setItem('stories', JSON.stringify([]));
-            }
-            if (!localStorage.getItem('users')) {
-                localStorage.setItem('users', JSON.stringify([]));
-            }
-            
-            updateAuthUI();
-            displayStories();
-        });
-
-        function togglePassword() {
-            const passwordInput = document.getElementById('password');
-            const toggleButton = document.querySelector('.toggle-password');
-            
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                toggleButton.textContent = '👁️‍🗨️';
-            } else {
-                passwordInput.type = 'password';
-                toggleButton.textContent = '👁️';
             }
         }
 
@@ -909,6 +940,33 @@
                 `;
             }
         }
+
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.querySelector('.toggle-password');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.textContent = '👁️‍🗨️';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.textContent = '👁️';
+            }
+        }
+
+        // Добавляем обработчик для инициализации при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            // Инициализация хранилища, если оно пустое
+            if (!localStorage.getItem('stories')) {
+                localStorage.setItem('stories', JSON.stringify([]));
+            }
+            if (!localStorage.getItem('users')) {
+                localStorage.setItem('users', JSON.stringify([]));
+            }
+            
+            updateAuthUI();
+            displayStories();
+        });
     </script>
 </body>
 </html> 
