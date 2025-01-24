@@ -284,17 +284,57 @@
             color: #666;
             font-style: italic;
         }
+        .password-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-size: 16px;
+            color: #666;
+        }
+
+        .toggle-password:hover {
+            color: #333;
+        }
+
+        .password-container input {
+            width: 100%;
+            padding-right: 35px;
+        }
+
+        #likedStoriesBtn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #likedStoriesBtn:hover {
+            background-color: #45a049;
+        }
+        
+        #likedStoriesBtn.active {
+            background-color: #45a049;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
     <nav class="nav-menu">
         <ul>
-            <li><a href="#home">Главная</a></li>
-            <li><a href="#stories">Все истории</a></li>
-            <li><a href="#new">Новые истории</a></li>
-            <li><a href="#popular">Популярные</a></li>
-            <li><a href="#about">О нас</a></li>
             <li><button id="myStoriesBtn" onclick="showMyStories()" style="display: none;">Мои истории</button></li>
+            <li><button id="likedStoriesBtn" onclick="showLikedStories()" style="display: none;">Понравившиеся</button></li>
             <li class="auth-buttons" id="authButtons">
                 <button onclick="showAuthForm('login')">Войти</button>
                 <button onclick="showAuthForm('register')">Регистрация</button>
@@ -371,7 +411,10 @@
             
             <div class="form-group">
                 <label for="password">Пароль:</label>
-                <input type="password" id="password" name="password" required>
+                <div class="password-container">
+                    <input type="password" id="password" name="password" required>
+                    <button type="button" class="toggle-password" onclick="togglePassword()">👁️</button>
+                </div>
                 <div class="error" id="passwordError"></div>
             </div>
             
@@ -407,13 +450,27 @@
 
         function showError(fieldId, message) {
             const errorDiv = document.getElementById(`${fieldId}Error`);
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                
+                const input = document.getElementById(fieldId);
+                if (input) {
+                    input.style.borderColor = '#ff4444';
+                    input.addEventListener('focus', function() {
+                        this.style.borderColor = '';
+                        errorDiv.style.display = 'none';
+                    }, { once: true });
+                }
+            }
         }
 
         function clearErrors() {
             const errorDivs = document.querySelectorAll('.error');
-            errorDivs.forEach(div => div.style.display = 'none');
+            errorDivs.forEach(div => {
+                div.textContent = '';
+                div.style.display = 'none';
+            });
         }
 
         function showMessage(type, message) {
@@ -477,12 +534,13 @@
                                 hasLiked ? 'Нажмите, чтобы убрать лайк' : 'Нажмите, чтобы поставить лайк';
                 
                 const storyHTML = `
-                    <div class="story-container">
+                    <div class="story-container" data-id="${story.id || Date.now()}">
                         <h2 class="story-title">${story.storyTitle}</h2>
                         <p class="story-author">Автор: ${story.authorName}</p>
                         <div class="story-text">${story.storyText}</div>
                         <div class="story-actions">
                             <button class="${likeButtonClass}" ${likeButtonDisabled} 
+                                onclick="handleLike(this, '${story.id || Date.now()}')"
                                 title="${likeTitle}"
                             >❤ ${story.likes || 0}</button>
                             <button class="share-button">Поделиться</button>
@@ -491,6 +549,40 @@
                 `;
                 storiesContainer.insertAdjacentHTML('afterbegin', storyHTML);
             });
+        }
+
+        // Добавляем функцию обработки лайков
+        function handleLike(button, storyId) {
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                showMessage('error', 'Необходимо войти в систему');
+                return;
+            }
+            
+            const stories = getStoriesFromLocalStorage();
+            const storyIndex = stories.findIndex(s => (s.id || Date.now()).toString() === storyId.toString());
+            
+            if (storyIndex === -1) return;
+            
+            const story = stories[storyIndex];
+            story.likedBy = story.likedBy || [];
+            
+            const hasLiked = story.likedBy.includes(currentUser.username);
+            
+            if (hasLiked) {
+                // Убираем лайк
+                story.likedBy = story.likedBy.filter(username => username !== currentUser.username);
+                story.likes = (story.likes || 1) - 1;
+                button.classList.remove('liked');
+            } else {
+                // Добавляем лайк
+                story.likedBy.push(currentUser.username);
+                story.likes = (story.likes || 0) + 1;
+                button.classList.add('liked');
+            }
+            
+            button.textContent = `❤ ${story.likes}`;
+            saveStoriesToLocalStorage(stories);
         }
 
         // Обновляем функцию для отображения историй пользователя
@@ -547,6 +639,7 @@
             try {
                 const newStory = {
                     ...storyData,
+                    id: Date.now(),
                     authorName: currentUser.username,
                     date: new Date().toISOString(),
                     likes: 0,
@@ -643,6 +736,7 @@
             const userName = document.getElementById('userName');
             const storyForm = document.querySelector('.story-form');
             const myStoriesBtn = document.getElementById('myStoriesBtn');
+            const likedStoriesBtn = document.getElementById('likedStoriesBtn');
             
             if (currentUser) {
                 authButtons.style.display = 'none';
@@ -650,13 +744,14 @@
                 userName.textContent = currentUser.username;
                 storyForm.style.display = 'block';
                 myStoriesBtn.style.display = 'block';
+                likedStoriesBtn.style.display = 'block';
             } else {
                 authButtons.style.display = 'flex';
                 authInfo.classList.remove('active');
                 userName.textContent = '';
                 storyForm.style.display = 'none';
                 myStoriesBtn.style.display = 'none';
-                // При выходе показываем все истории
+                likedStoriesBtn.style.display = 'none';
                 displayStories();
             }
         }
@@ -675,6 +770,8 @@
         // Обработка формы авторизации/регистрации
         document.getElementById('authForm').addEventListener('submit', (e) => {
             e.preventDefault();
+            clearErrors();
+            
             const type = e.target.dataset.type;
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -684,6 +781,13 @@
                 const users = getUsers();
                 if (users.some(u => u.username === username)) {
                     showError('username', 'Пользователь с таким именем уже существует');
+                    document.getElementById('usernameError').style.display = 'block';
+                    return;
+                }
+                
+                if (password.length < 6) {
+                    showError('password', 'Пароль должен содержать минимум 6 символов');
+                    document.getElementById('passwordError').style.display = 'block';
                     return;
                 }
                 
@@ -692,22 +796,29 @@
                 saveUsers(users);
                 setCurrentUser(newUser);
                 showMessage('success', 'Регистрация успешна!');
+                document.getElementById('authContainer').classList.remove('active');
+                e.target.reset();
             } else {
                 // Вход
                 const users = getUsers();
-                const user = users.find(u => u.username === username && u.password === password);
+                const userExists = users.find(u => u.username === username);
                 
-                if (user) {
-                    setCurrentUser(user);
-                    showMessage('success', 'Вход выполнен успешно!');
-                } else {
-                    showMessage('error', 'Неверное имя пользователя или пароль');
+                if (!userExists) {
+                    showError('username', 'Пользователь с таким именем не найден');
                     return;
                 }
+                
+                const user = users.find(u => u.username === username && u.password === password);
+                if (!user) {
+                    showError('password', 'Неверный пароль');
+                    return;
+                }
+                
+                setCurrentUser(user);
+                showMessage('success', 'Вход выполнен успешно!');
+                document.getElementById('authContainer').classList.remove('active');
+                e.target.reset();
             }
-            
-            document.getElementById('authContainer').classList.remove('active');
-            e.target.reset();
         });
 
         // Выход из системы
@@ -722,6 +833,45 @@
             updateAuthUI();
             displayStories();
         });
+
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.querySelector('.toggle-password');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.textContent = '👁️‍🗨️';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.textContent = '👁️';
+            }
+        }
+
+        // Добавляем функцию для отображения понравившихся историй
+        function showLikedStories() {
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                showMessage('error', 'Необходимо войти в систему');
+                return;
+            }
+            
+            // Обновляем активное состояние кнопок
+            const allButtons = document.querySelectorAll('.nav-menu button');
+            allButtons.forEach(btn => btn.classList.remove('active'));
+            document.getElementById('likedStoriesBtn').classList.add('active');
+            
+            // Фильтруем и отображаем только понравившиеся истории
+            displayStories(story => story.likedBy && story.likedBy.includes(currentUser.username));
+            
+            const stories = document.querySelectorAll('.story-container');
+            if (stories.length === 0) {
+                document.querySelector('.stories-container').innerHTML = `
+                    <div class="no-stories-message">
+                        У вас пока нет понравившихся историй
+                    </div>
+                `;
+            }
+        }
     </script>
 </body>
 </html> 
