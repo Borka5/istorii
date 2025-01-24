@@ -263,7 +263,7 @@
             background-color: #45a049;
         }
         
-        .nav-menu button.active {
+        .nav-button.active {
             background-color: #45a049;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -320,25 +320,44 @@
         }
 
         .like-button {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
             padding: 5px 15px;
-            border: none;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s ease;
-            background-color: #f0f0f0;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
         
         .like-button.liked {
-            background-color: #ffeded;
+            background-color: #ffe6e6;
+            border-color: #ffcccc;
             color: #ff4444;
         }
         
         .like-button:hover {
             transform: scale(1.05);
+            background-color: #f0f0f0;
         }
         
-        .like-button:active {
-            transform: scale(0.95);
+        .like-button.liked:hover {
+            background-color: #ffd9d9;
+        }
+
+        .nav-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .nav-button:hover {
+            background-color: #45a049;
         }
     </style>
 </head>
@@ -436,13 +455,19 @@
 
     <script>
         function validateStory(data) {
+            const sanitizeInput = (input) => {
+                return input
+                    .replace(/[&<>"']/g, char => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    })[char]);
+            };
+            
             let isValid = true;
             const errors = {};
-            
-            // Проверка на XSS
-            const sanitizeInput = (input) => {
-                return input.replace(/[<>]/g, '');
-            };
             
             // Валидация названия
             if (!data.storyTitle || data.storyTitle.trim().length < 3) {
@@ -651,7 +676,13 @@
                 switch (operation) {
                     case 'get':
                         const item = localStorage.getItem(key);
-                        return item ? JSON.parse(item) : null;
+                        if (!item) return null;
+                        try {
+                            return JSON.parse(item);
+                        } catch (e) {
+                            console.error('Invalid JSON in storage:', e);
+                            return null;
+                        }
                         
                     case 'set':
                         if (data === null) return false;
@@ -745,7 +776,9 @@
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
                 searchInput.addEventListener('input', debounce((e) => {
-                    searchStories(e.target.value);
+                    if (e && e.target) {
+                        searchStories(e.target.value);
+                    }
                 }, 300));
                 
                 // Очистка поиска по Escape
@@ -1015,8 +1048,56 @@
             }
         }
 
-        // Обновляем функцию обработки лайков
+        // Обновляем функцию handleStorySubmit
+        async function handleStorySubmit(e) {
+            e.preventDefault();
+            clearErrors();
+            
+            try {
+                const currentUser = getCurrentUser();
+                if (!currentUser) {
+                    showMessage('error', 'Необходимо войти в систему');
+                    return;
+                }
+                
+                const formData = new FormData(e.target);
+                const storyData = {
+                    id: crypto.randomUUID(), // Убедимся, что ID генерируется
+                    title: formData.get('storyTitle')?.trim(),
+                    text: formData.get('storyText')?.trim(),
+                    authorName: currentUser.username,
+                    date: new Date().toISOString(),
+                    likes: 0, // Инициализируем счетчик лайков
+                    likedBy: [] // Инициализируем массив пользователей
+                };
+                
+                const { isValid, errors } = validateStory(storyData);
+                
+                if (!isValid) {
+                    Object.keys(errors).forEach(key => {
+                        showError(key, errors[key]);
+                    });
+                    return;
+                }
+                
+                const stories = JSON.parse(localStorage.getItem('stories') || '[]');
+                stories.unshift(storyData);
+                localStorage.setItem('stories', JSON.stringify(stories));
+                
+                e.target.reset();
+                displayStories();
+                showMessage('success', 'История успешно добавлена!');
+                
+            } catch (error) {
+                console.error('Ошибка при добавлении истории:', error);
+                showMessage('error', 'Произошла ошибка при добавлении истории');
+            }
+        }
+
+        // Обновляем функцию handleLike
         function handleLike(button, storyId) {
+            console.log('handleLike вызван:', { button, storyId }); // Отладка
+            
             try {
                 const currentUser = getCurrentUser();
                 if (!currentUser) {
@@ -1024,17 +1105,17 @@
                     return;
                 }
                 
-                const stories = getStoriesFromLocalStorage();
+                const stories = JSON.parse(localStorage.getItem('stories') || '[]');
                 const storyIndex = stories.findIndex(s => s.id === storyId);
                 
                 if (storyIndex === -1) {
-                    showMessage('error', 'История не найдена');
+                    console.error('История не найдена:', storyId);
                     return;
                 }
                 
                 const story = stories[storyIndex];
                 
-                // Инициализируем массив лайков, если его нет
+                // Инициализируем поля, если они отсутствуют
                 if (!Array.isArray(story.likedBy)) {
                     story.likedBy = [];
                 }
@@ -1043,28 +1124,22 @@
                 }
                 
                 const hasLiked = story.likedBy.includes(currentUser.username);
+                console.log('Текущее состояние лайка:', { hasLiked, likedBy: story.likedBy }); // Отладка
                 
                 if (hasLiked) {
-                    // Убираем лайк
                     story.likedBy = story.likedBy.filter(username => username !== currentUser.username);
                     story.likes = Math.max(0, story.likes - 1);
-                    button.classList.remove('liked');
-                    button.innerHTML = `🤍 ${story.likes}`;
                 } else {
-                    // Добавляем лайк
                     story.likedBy.push(currentUser.username);
                     story.likes += 1;
-                    button.classList.add('liked');
-                    button.innerHTML = `❤️ ${story.likes}`;
                 }
                 
-                // Сохраняем обновленные истории
-                if (saveStoriesToLocalStorage(stories)) {
-                    // Обновляем только конкретную историю в DOM
-                    updateStoryLikes(storyId, story.likes, hasLiked);
-                } else {
-                    throw new Error('Не удалось сохранить изменения');
-                }
+                // Обновляем localStorage
+                localStorage.setItem('stories', JSON.stringify(stories));
+                console.log('Обновленные истории:', stories); // Отладка
+                
+                // Обновляем отображение
+                displayStories();
                 
             } catch (error) {
                 console.error('Ошибка при обработке лайка:', error);
@@ -1072,32 +1147,26 @@
             }
         }
 
-        // Функция обновления отображения лайков для конкретной истории
-        function updateStoryLikes(storyId, likesCount, wasLiked) {
-            const storyElement = document.querySelector(`[data-id="${storyId}"]`);
-            if (storyElement) {
-                const likeButton = storyElement.querySelector('.like-button');
-                if (likeButton) {
-                    likeButton.innerHTML = `${wasLiked ? '🤍' : '❤️'} ${likesCount}`;
-                    if (wasLiked) {
-                        likeButton.classList.remove('liked');
-                    } else {
-                        likeButton.classList.add('liked');
-                    }
-                }
-            }
-        }
-
-        // Обновляем функцию отображения историй с поддержкой лайков
-        function displayStories(stories = null) {
+        // Обновляем функцию displayStories для корректного отображения лайков
+        function displayStories(filterFn = null) {
             try {
                 const storiesContainer = document.querySelector('.stories-container');
-                if (!storiesContainer) return;
+                if (!storiesContainer) {
+                    console.error('Контейнер историй не найден');
+                    return;
+                }
                 
-                const allStories = stories || getStoriesFromLocalStorage();
+                let stories = JSON.parse(localStorage.getItem('stories') || '[]');
+                console.log('Загруженные истории:', stories); // Отладка
+                
+                if (filterFn) {
+                    stories = stories.filter(filterFn);
+                }
+                
                 const currentUser = getCurrentUser();
+                console.log('Текущий пользователь:', currentUser); // Отладка
                 
-                if (allStories.length === 0) {
+                if (stories.length === 0) {
                     storiesContainer.innerHTML = `
                         <div class="no-stories-message">
                             Пока нет историй
@@ -1106,13 +1175,22 @@
                     return;
                 }
                 
-                const storiesHTML = allStories.map(story => {
-                    // Проверяем и инициализируем поля лайков
-                    if (!Array.isArray(story.likedBy)) story.likedBy = [];
-                    if (typeof story.likes !== 'number') story.likes = 0;
+                const storiesHTML = stories.map(story => {
+                    // Проверяем наличие необходимых полей
+                    if (!story.id) {
+                        console.error('История без ID:', story);
+                        return '';
+                    }
                     
-                    const hasLiked = currentUser && story.likedBy.includes(currentUser.username);
+                    const hasLiked = currentUser && story.likedBy && story.likedBy.includes(currentUser.username);
                     const isAuthor = currentUser && story.authorName === currentUser.username;
+                    
+                    console.log(`История ${story.id}:`, { // Отладка
+                        hasLiked,
+                        isAuthor,
+                        likedBy: story.likedBy,
+                        likes: story.likes
+                    });
                     
                     return `
                         <div class="story-container" data-id="${story.id}">
@@ -1125,13 +1203,16 @@
                             <div class="story-actions">
                                 ${currentUser ? `
                                     <button 
+                                        type="button"
                                         class="like-button ${hasLiked ? 'liked' : ''}"
                                         onclick="handleLike(this, '${story.id}')"
+                                        data-story-id="${story.id}"
                                     >
-                                        ${hasLiked ? '❤️' : '🤍'} ${story.likes}
+                                        ${hasLiked ? '❤️' : '🤍'} ${story.likes || 0}
                                     </button>
                                     ${isAuthor ? `
                                         <button 
+                                            type="button"
                                             class="delete-button"
                                             onclick="deleteStory('${story.id}')"
                                         >
@@ -1146,58 +1227,21 @@
                 
                 storiesContainer.innerHTML = storiesHTML;
                 
+                // Добавляем прямые обработчики событий
+                const likeButtons = storiesContainer.querySelectorAll('.like-button');
+                likeButtons.forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const storyId = this.dataset.storyId;
+                        handleLike(this, storyId);
+                    });
+                });
+                
             } catch (error) {
                 console.error('Ошибка при отображении историй:', error);
                 showMessage('error', 'Произошла ошибка при отображении историй');
             }
         }
-
-        // Добавляем обработчик отправки формы
-        document.getElementById('newStoryForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            clearErrors();
-            
-            const currentUser = getCurrentUser();
-            if (!currentUser) {
-                showMessage('error', 'Необходимо войти в систему');
-                return;
-            }
-            
-            const formData = new FormData(e.target);
-            const storyData = Object.fromEntries(formData);
-            
-            const { isValid, errors } = validateStory(storyData);
-            
-            if (!isValid) {
-                Object.keys(errors).forEach(key => {
-                    showError(key, errors[key]);
-                });
-                return;
-            }
-            
-            try {
-                const newStory = {
-                    id: Date.now().toString(),
-                    title: storyData.storyTitle.trim(),
-                    text: storyData.storyText.trim(),
-                    authorName: currentUser.username,
-                    date: new Date().toISOString(),
-                    likes: 0,
-                    likedBy: []
-                };
-                
-                const stories = getStoriesFromLocalStorage();
-                stories.unshift(newStory);
-                saveStoriesToLocalStorage(stories);
-                
-                e.target.reset();
-                displayStories();
-                showMessage('success', 'История успешно добавлена!');
-            } catch (error) {
-                console.error('Ошибка при добавлении истории:', error);
-                showMessage('error', 'Произошла ошибка при добавлении истории');
-            }
-        });
 
         function searchStories(query) {
             const stories = document.querySelectorAll('.story-container');
@@ -1226,9 +1270,13 @@
 
         // Добавляем обработчик события с debounce
         const searchInput = document.getElementById('searchInput');
-        searchInput.addEventListener('input', debounce((e) => {
-            searchStories(e.target.value);
-        }, 300));
+        if (searchInput) {
+            searchInput.addEventListener('input', debounce((e) => {
+                if (e && e.target) {
+                    searchStories(e.target.value);
+                }
+            }, 300));
+        }
 
         // Добавляем обработчик для очистки поиска
         searchInput.addEventListener('keyup', (e) => {
@@ -1337,25 +1385,48 @@
         }
 
         function formatDate(dateString) {
-            return new Date(dateString).toLocaleString('ru-RU', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) {
+                    throw new Error('Invalid date');
+                }
+                return date.toLocaleString('ru-RU', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (error) {
+                console.error('Error formatting date:', error);
+                return 'Дата неизвестна';
+            }
         }
 
         // Функция обработки ошибок API
-        function handleApiError(error, defaultMessage = 'Произошла ошибка') {
-            console.error('API Error:', error);
+        function handleError(error, context = '', defaultMessage = 'Произошла ошибка') {
+            // Логирование ошибки
+            const errorLog = {
+                timestamp: new Date().toISOString(),
+                message: error.message || defaultMessage,
+                stack: error.stack,
+                context: context
+            };
             
-            let message = defaultMessage;
-            if (error.message) {
-                message = error.message;
+            console.error('Error:', errorLog);
+            
+            // Сохранение лога
+            try {
+                const errorLogs = JSON.parse(localStorage.getItem('errorLogs') || '[]');
+                errorLogs.push(errorLog);
+                if (errorLogs.length > 50) errorLogs.shift();
+                localStorage.setItem('errorLogs', JSON.stringify(errorLogs));
+            } catch (e) {
+                console.error('Error saving error log:', e);
             }
             
-            showMessage('error', message);
+            // Показ сообщения пользователю
+            showMessage('error', error.message || defaultMessage);
         }
 
         // Функция проверки и восстановления данных
@@ -1543,52 +1614,6 @@
             };
         }
 
-        // Обновляем обработку ошибок в основных функциях
-        function handleStorySubmit(e) {
-            e.preventDefault();
-            clearErrors();
-            
-            try {
-                const currentUser = getCurrentUser();
-                if (!currentUser) {
-                    showMessage('error', 'Необходимо войти в систему');
-                    return;
-                }
-                
-                const formData = new FormData(e.target);
-                const storyData = {
-                    title: formData.get('title')?.trim(),
-                    text: formData.get('text')?.trim(),
-                    authorName: currentUser.username,
-                    date: new Date().toISOString(),
-                    likes: 0,
-                    likedBy: []
-                };
-                
-                const validation = validateStoryData(storyData);
-                if (!validation.isValid) {
-                    validation.errors.forEach(error => showMessage('error', error));
-                    return;
-                }
-                
-                const stories = getStoriesFromLocalStorage();
-                stories.unshift({ ...storyData, id: Date.now().toString() });
-                
-                if (saveStoriesToLocalStorage(stories)) {
-                    e.target.reset();
-                    displayStories();
-                    showMessage('success', 'История успешно добавлена!');
-                } else {
-                    throw new Error('Не удалось сохранить историю');
-                }
-                
-            } catch (error) {
-                console.error('Ошибка при добавлении истории:', error);
-                showMessage('error', 'Произошла ошибка при добавлении истории');
-                logError(error, 'handleStorySubmit');
-            }
-        }
-
         // Запускаем диагностику при загрузке
         document.addEventListener('DOMContentLoaded', () => {
             if (diagnoseApp()) {
@@ -1724,6 +1749,24 @@
                 });
             }
         });
+
+        function debounce(func, wait) {
+            let timeout;
+            const debouncedFunction = function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+            
+            debouncedFunction.cancel = function() {
+                clearTimeout(timeout);
+            };
+            
+            return debouncedFunction;
+        }
     </script>
 </body>
 </html> 
