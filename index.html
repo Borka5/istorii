@@ -427,8 +427,13 @@
             let isValid = true;
             const errors = {};
             
+            // Проверка на XSS
+            const sanitizeInput = (input) => {
+                return input.replace(/[<>]/g, '');
+            };
+            
             // Валидация названия
-            if (data.storyTitle.length < 3) {
+            if (!data.storyTitle || data.storyTitle.trim().length < 3) {
                 errors.title = 'Название должно содержать минимум 3 символа';
                 isValid = false;
             } else if (data.storyTitle.length > 100) {
@@ -437,12 +442,18 @@
             }
             
             // Валидация текста истории
-            if (data.storyText.length < 10) {
+            if (!data.storyText || data.storyText.trim().length < 10) {
                 errors.text = 'История должна содержать минимум 10 символов';
                 isValid = false;
             } else if (data.storyText.length > 5000) {
                 errors.text = 'История не должна превышать 5000 символов';
                 isValid = false;
+            }
+            
+            // Санитизация данных
+            if (isValid) {
+                data.storyTitle = sanitizeInput(data.storyTitle);
+                data.storyText = sanitizeInput(data.storyText);
             }
             
             return { isValid, errors };
@@ -477,16 +488,19 @@
             const successMsg = document.getElementById('successMessage');
             const errorMsg = document.getElementById('errorMessage');
             
+            // Сначала скрываем все сообщения
             successMsg.style.display = 'none';
             errorMsg.style.display = 'none';
             
             if (type === 'success') {
+                successMsg.textContent = message || 'Операция выполнена успешно!';
                 successMsg.style.display = 'block';
             } else {
-                errorMsg.textContent = message;
+                errorMsg.textContent = message || 'Произошла ошибка';
                 errorMsg.style.display = 'block';
             }
             
+            // Автоматически скрываем сообщение через 3 секунды
             setTimeout(() => {
                 successMsg.style.display = 'none';
                 errorMsg.style.display = 'none';
@@ -495,13 +509,23 @@
 
         // Функция для сохранения историй в localStorage
         function saveStoriesToLocalStorage(stories) {
-            localStorage.setItem('stories', JSON.stringify(stories));
+            try {
+                localStorage.setItem('stories', JSON.stringify(stories));
+            } catch (error) {
+                console.error('Ошибка при сохранении историй:', error);
+                showMessage('error', 'Произошла ошибка при сохранении');
+            }
         }
 
         // Функция для получения историй из localStorage
         function getStoriesFromLocalStorage() {
-            const stories = localStorage.getItem('stories');
-            return stories ? JSON.parse(stories) : [];
+            try {
+                const stories = localStorage.getItem('stories');
+                return stories ? JSON.parse(stories) : [];
+            } catch (error) {
+                console.error('Ошибка при чтении историй:', error);
+                return [];
+            }
         }
 
         // Обновляем функцию отображения историй
@@ -534,13 +558,13 @@
                                 hasLiked ? 'Нажмите, чтобы убрать лайк' : 'Нажмите, чтобы поставить лайк';
                 
                 const storyHTML = `
-                    <div class="story-container" data-id="${story.id || Date.now()}">
+                    <div class="story-container" data-id="${story.id}">
                         <h2 class="story-title">${story.storyTitle}</h2>
                         <p class="story-author">Автор: ${story.authorName}</p>
                         <div class="story-text">${story.storyText}</div>
                         <div class="story-actions">
                             <button class="${likeButtonClass}" ${likeButtonDisabled} 
-                                onclick="handleLike(this, '${story.id || Date.now()}')"
+                                onclick="handleLike(this, '${story.id}')"
                                 title="${likeTitle}"
                             >❤ ${story.likes || 0}</button>
                             <button class="share-button">Поделиться</button>
@@ -560,19 +584,21 @@
             }
             
             const stories = getStoriesFromLocalStorage();
-            const storyIndex = stories.findIndex(s => (s.id || Date.now()).toString() === storyId.toString());
+            const story = stories.find(s => s.id.toString() === storyId.toString());
             
-            if (storyIndex === -1) return;
+            if (!story) return;
             
-            const story = stories[storyIndex];
-            story.likedBy = story.likedBy || [];
+            // Инициализируем массив лайков, если его нет
+            if (!story.likedBy) {
+                story.likedBy = [];
+            }
             
             const hasLiked = story.likedBy.includes(currentUser.username);
             
             if (hasLiked) {
                 // Убираем лайк
                 story.likedBy = story.likedBy.filter(username => username !== currentUser.username);
-                story.likes = (story.likes || 1) - 1;
+                story.likes = Math.max(0, (story.likes || 1) - 1);
                 button.classList.remove('liked');
             } else {
                 // Добавляем лайк
@@ -583,6 +609,9 @@
             
             button.textContent = `❤ ${story.likes}`;
             saveStoriesToLocalStorage(stories);
+            
+            // Обновляем отображение всех историй
+            displayStories();
         }
 
         // Обновляем функцию для отображения историй пользователя
@@ -639,7 +668,7 @@
             try {
                 const newStory = {
                     ...storyData,
-                    id: Date.now(),
+                    id: Date.now().toString(), // Преобразуем в строку для консистентности
                     authorName: currentUser.username,
                     date: new Date().toISOString(),
                     likes: 0,
@@ -652,7 +681,7 @@
                 
                 displayStories();
                 e.target.reset();
-                showMessage('success');
+                showMessage('success', 'История успешно добавлена!');
             } catch (error) {
                 console.error('Ошибка при добавлении истории:', error);
                 showMessage('error', 'Произошла ошибка при добавлении истории');
@@ -828,8 +857,16 @@
             showMessage('success', 'Вы вышли из системы');
         }
 
-        // Инициализация при загрузке страницы
+        // Добавим проверку инициализации при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
+            // Инициализация хранилища, если оно пустое
+            if (!localStorage.getItem('stories')) {
+                localStorage.setItem('stories', JSON.stringify([]));
+            }
+            if (!localStorage.getItem('users')) {
+                localStorage.setItem('users', JSON.stringify([]));
+            }
+            
             updateAuthUI();
             displayStories();
         });
